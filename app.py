@@ -1,30 +1,35 @@
 import streamlit as st
 import tensorflow as tf
+import re
+import string
+import preprocessor as p
 from transformers import AutoTokenizer, TFAutoModelForSequenceClassification
 
-# Define the available models
-models = {
-    "BERT": {
-        "tokenizer": AutoTokenizer.from_pretrained('itsam26/bert-indonesia-sexual'),
-        "model": TFAutoModelForSequenceClassification.from_pretrained('itsam26/bert-indonesia-sexual')
-    },
-    "RoBERTa": {
-        "tokenizer": AutoTokenizer.from_pretrained('itsam26/roberta-indonesia-sexual'),
-        "model": TFAutoModelForSequenceClassification.from_pretrained('itsam26/roberta-indonesia-sexual')
-    },
-    "IndoBERT": {
-        "tokenizer": AutoTokenizer.from_pretrained('itsam26/indobert-indonesia-sexual'),
-        "model": TFAutoModelForSequenceClassification.from_pretrained('itsam26/indobert-indonesia-sexual')
-    },
-    "XLNet": {
-        "tokenizer": AutoTokenizer.from_pretrained('itsam26/xlnet-indonesia-sexual'),
-        "model": TFAutoModelForSequenceClassification.from_pretrained('itsam26/xlnet-indonesia-sexual')
-    },
-    "IndoXLNet": {
-        "tokenizer": AutoTokenizer.from_pretrained('itsam26/indoxlnet-indonesia-sexual'),
-        "model": TFAutoModelForSequenceClassification.from_pretrained('itsam26/indoxlnet-indonesia-sexual')
+st.markdown(
+    """
+    <style>
+    body {
+        background-color: #f2f2f2;  /* Ganti dengan warna latar belakang yang diinginkan */
     }
-}
+    </style>
+    """,
+    unsafe_allow_html=True
+)
+
+tokenizer = AutoTokenizer.from_pretrained('itsam26/indobert-indonesia-sexual')
+model = TFAutoModelForSequenceClassification.from_pretrained('itsam26/indobert-indonesia-sexual')
+
+pattern = r'[0-9]'
+
+def preprocess_text(text):
+    for punctuation in string.punctuation:
+        text = p.clean(text) #menghapus tag, hashtag
+        text = re.sub(r'http[s]?://\S+','',text) #menghapus URL
+        text = text.replace(punctuation, '') #menghapus tanda baca
+        text = re.sub(pattern, '', text)#menghapus angka
+        text = re.sub(r'\r?\n|\r','',text)#menghapus baris baru
+        text = text.lower() #mengubah ke huruf kecil (case folding)
+    return text
 
 # Define the Streamlit app
 def main():
@@ -33,13 +38,7 @@ def main():
         0: "bukan pelecehan seksual",
         1: "pelecehan seksual"
     }
-    st.title("Text Classification Demo")
-
-    # Create model selection dropdown
-    model_name = st.selectbox("Select a model", list(models.keys()))
-
-    # Get the selected model
-    selected_model = models[model_name]
+    st.title("Text Classification IndoBERT")
 
     # Create input text box
     input_text = st.text_input("Enter a sentence", "")
@@ -48,7 +47,8 @@ def main():
     if st.button("Predict"):
         # Tokenize the input text
         # Tokenize the input text
-        inputs = selected_model['tokenizer'].encode_plus(input_text, add_special_tokens=True, return_tensors="tf")
+        input_text = preprocess_text(input_text)
+        inputs = tokenizer.encode_plus(input_text, add_special_tokens=True, return_tensors="tf")
 
         # Get the input tensors
         input_ids = inputs["input_ids"]
@@ -59,7 +59,7 @@ def main():
         attention_mask = tf.reshape(attention_mask, (1, -1))
 
         # Perform the inference
-        outputs = selected_model['model'](input_ids=input_ids, attention_mask=attention_mask)
+        outputs = model(input_ids=input_ids, attention_mask=attention_mask)
         predicted_class = tf.argmax(outputs.logits, axis=-1).numpy()[0]
         predicted_label = label_map[predicted_class]
 
